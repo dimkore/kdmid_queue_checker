@@ -1,8 +1,3 @@
-
-import cv2
-import numpy as np 
-import pytesseract
-import config
 import time 
 import datetime
 import os
@@ -22,7 +17,7 @@ import base64
 from io import BytesIO
 from PIL import Image
 
-from core.image_processing import removeIsland
+from core.captcha import CaptchaSolver
 
 import logging
 logging.basicConfig(filename='queue.log',
@@ -30,10 +25,6 @@ logging.basicConfig(filename='queue.log',
                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                     datefmt='%H:%M:%S',
                     level=logging.INFO)
-
-pytesseract.pytesseract.tesseract_cmd = config.TESSERACT_PATH
-
-
 
 class QueueChecker: 
     def __init__(self):
@@ -104,29 +95,12 @@ class QueueChecker:
         box = (int(left + 200), int(top), int(right - 200), int(bottom))
         area = img.crop(box)
         area.save(self.screen_name, 'PNG')
-        
-        img  = cv2.imread(self.screen_name)
-        # Convert to grayscale
-        c_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        # Median filter
-        out = cv2.medianBlur(c_gray,1)
-        # Image thresholding 
-        a = np.where(out>150, 1, out)
-        out = np.where(a!=1, 0, a)
-        # Islands removing with threshold = 30
-        out = removeIsland(out, 150)
-        # Median filter
-        out = cv2.medianBlur(out,3)
-
-        # Cropping an image
-        out = out[80:140, 5:195]
-
-        cv2.imwrite(self.image_name, out*255)
-        os.remove(self.screen_name)
         os.remove("screenshot.png")
     
     def recognize_image(self): 
-        digits = pytesseract.image_to_string(self.image_name, config='--psm 8 --oem 3 -c tessedit_char_whitelist=0123456789')
+        captcha = CaptchaSolver()
+        captcha.ReadImage(self.screen_name)
+        digits = captcha.GetNumbers(6)
         return digits
 
     def check_queue(self, kdmid_subdomain, order_id, code): 

@@ -70,7 +70,7 @@ class QueueChecker:
         except NoSuchElementException:
             return mark
     
-    def screenshot_captcha(self, driver, error_screen=None): 
+    def screenshot_captcha(self, driver):
 		   # make a screenshot of the window, crop the image to get captcha only, 
 		   # process the image: remove grey background, make letters black
         driver.save_screenshot("screenshot.png")
@@ -117,11 +117,12 @@ class QueueChecker:
         driver.get(url)
             
         error = True
-        error_screen = False
+        captcha_attempt = 0
         # iterate until captcha is recognized 
         while error: 
-            self.screenshot_captcha(driver, error_screen)
+            self.screenshot_captcha(driver)
             digits = self.recognize_image()
+            captcha_attempt += 1
 
             WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.XPATH, self.text_form))).send_keys(str(digits))
 
@@ -149,23 +150,25 @@ class QueueChecker:
             window_after = driver.window_handles[0]
             driver.switch_to.window(window_after)
 
-            error = False
-            
             try: 
                 driver.find_element(By.XPATH, self.main_button_id)    
+                error = False
             except: 
-                error = True
-                error_screen = True
+                message = 'Wrong captcha code {}. Total attempts: {}'.format(digits, captcha_attempt)
+                logging.warning(message)
 
                 try:
                     element = WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located((By.XPATH, self.text_form))
                     )
+                    driver.find_element(By.XPATH, self.text_form).clear()
                 except:
-                    print("Element not found")
-
-                driver.find_element(By.XPATH, self.text_form).clear()
-
+                    status = 'pause'
+                    message = 'The page is mailformed. Service is down? Try in 30 seconds to reload the page.'
+                    logging.warning(message)
+                    time.sleep(30)
+                    driver.get(url)
+                    continue
         try: 
             if self.check_exists_by_xpath(self.checkbox, driver): 			
                 driver.find_element(By.XPATH,self.checkbox).click()
@@ -182,12 +185,20 @@ class QueueChecker:
                 self.write_success_file(message, str(status))			
                 
             else: 
-                message = '{} - no free timeslots for now'.format(datetime.date.today())
+                message = '{} - no free timeslots for now'.format(datetime.datetime.now())
                 status = 'in process'
                 print(message)
                 logging.info(message)
+                try:
+                    element = driver.find_element(By.XPATH, '//td[@id="center-panel"]')
+                    for line in element.text.splitlines(keepends=False):
+                        if "Ваша позиция в очереди" in line:
+                            logging.info(line)
+                            print(line)
+                except:
+                    pass
         except: 
-            message = '{} --- no free timeslots for now'.format(datetime.date.today())
+            message = '{} --- no free timeslots for now'.format(datetime.datetime.now())
             logging.info(message)
             
         driver.quit()

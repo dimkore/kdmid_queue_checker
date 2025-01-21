@@ -120,7 +120,16 @@ class QueueChecker:
         captcha_attempt = 0
         # iterate until captcha is recognized 
         while error: 
-            self.screenshot_captcha(driver)
+            try:
+                self.screenshot_captcha(driver)
+            except:
+                status = 'pause'
+                message = 'Failed to get captcha image. Service is down? Try in 30 seconds to reload the page.'
+                logging.warning(message)
+                time.sleep(30)
+                driver.get(url)
+                continue
+
             digits = self.recognize_image()
             captcha_attempt += 1
 
